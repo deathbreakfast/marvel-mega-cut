@@ -1,0 +1,9 @@
+ffmpeg-python
+click
+python-dotenv
+pandas
+moviepy
+pytest
+Pillow
+pytesseract
+opencv-python 
