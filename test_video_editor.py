@@ -20,7 +20,7 @@ def init_test_videos():
     # Create three 2-second video files with static titles
     titles = ['Test Movie 1', 'Test Show', 'Test Movie 2']
     for title in titles:
-        path = os.path.join(TEST_VIDEO_DIR, f'{title}.mp4')
+        path = os.path.join(TEST_VIDEO_DIR, f'{title}.mkv')
         if not os.path.exists(path):
             clip = TextClip(
                 text=title,
@@ -57,8 +57,8 @@ def test_process_scenes():
 
     # Validate that the test videos were created and contain the expected titles using OCR
     for title in ['Test Movie 1', 'Test Show', 'Test Movie 2']:
-        video_path = os.path.join(TEST_VIDEO_DIR, f'{title}.mp4')
-        assert os.path.exists(video_path), f"Test video {title}.mp4 was not created."
+        video_path = os.path.join(TEST_VIDEO_DIR, f'{title}.mkv')
+        assert os.path.exists(video_path), f"Test video {title}.mkv was not created."
         ocr_text = extract_text_from_frame(video_path)
         assert title in ocr_text, f"OCR did not find title '{title}' in {video_path}"
 

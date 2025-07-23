@@ -28,6 +28,11 @@ This project automates the creation of a Marvel Infinity Saga "Mega Cut" by stit
    pip install -r requirements.txt
    ```
 
+## File Format Requirements
+- **Input movie/show files**: Must be in MKV format (`.mkv`)
+- **File naming**: Files should be named exactly as they appear in the CSV's "Movie/Show" column, with `.mkv` extension
+- **Output**: Generated mega cut files will be in MP4 format for wider compatibility
+
 ## CSV Template & Format
 This project uses a documented CSV template (`sample_scenes.csv`) that includes:
 - Multi-row headers for documentation and navigation

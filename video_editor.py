@@ -34,13 +34,13 @@ def process_scenes(scenes, movie_folder, output_folder, chunk_duration=2*3600):
     clips = []
     scene_durations = []
     for scene in scenes:
-        # Find the video file (simple heuristic: movie_show + .mp4)
+        # Find the video file (simple heuristic: movie_show + .mkv)
         # You may want to improve this for real use cases
         base_name = scene['movie_show'].replace(':', '').replace('/', '').replace(' ', '_')
-        video_path = os.path.join(movie_folder, f"{scene['movie_show']}.mp4")
+        video_path = os.path.join(movie_folder, f"{scene['movie_show']}.mkv")
         if not os.path.exists(video_path):
             # Try with underscores
-            video_path = os.path.join(movie_folder, f"{base_name}.mp4")
+            video_path = os.path.join(movie_folder, f"{base_name}.mkv")
         if not os.path.exists(video_path):
             print(f"[WARN] Video file not found for scene: {scene['movie_show']} at {video_path}")
             continue
@@ -100,9 +100,9 @@ def process_scenes(scenes, movie_folder, output_folder, chunk_duration=2*3600):
             # Rebuild the base VideoFileClip and overlay for each scene
             scene = scenes[scene_idx]
             base_name = scene['movie_show'].replace(':', '').replace('/', '').replace(' ', '_')
-            video_path = os.path.join(movie_folder, f"{scene['movie_show']}.mp4")
+            video_path = os.path.join(movie_folder, f"{scene['movie_show']}.mkv")
             if not os.path.exists(video_path):
-                video_path = os.path.join(movie_folder, f"{base_name}.mp4")
+                video_path = os.path.join(movie_folder, f"{base_name}.mkv")
             start = parse_timecode(scene['start_timecode'])
             end = parse_timecode(scene['end_timecode'])
             base_clip = VideoFileClip(video_path).subclipped(start, end)
