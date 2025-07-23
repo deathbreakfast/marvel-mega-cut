@@ -11,11 +11,12 @@ load_dotenv()
 @click.command()
 @click.option('--csv', 'csv_path', default=None, help='Path to the scenes CSV file')
 @click.option('--output', 'output_folder', default=None, help='Output folder for mega cut videos')
-def main(csv_path, output_folder):
+@click.option('--movies', 'movie_folder', default=None, help='Path to the folder containing movie/show files')
+def main(csv_path, output_folder, movie_folder):
     # Get env vars if CLI not provided
     csv_path = csv_path or os.getenv('MEGA_CUT_CSV')
     output_folder = output_folder or os.getenv('MEGA_CUT_OUTPUT')
-    movie_folder = os.getenv('MEGA_CUT_MOVIE_FOLDER')
+    movie_folder = movie_folder or os.getenv('MEGA_CUT_MOVIE_FOLDER')
 
     if not csv_path or not movie_folder or not output_folder:
         print("Error: CSV path, movie folder, and output folder must be specified via CLI or environment variables.")

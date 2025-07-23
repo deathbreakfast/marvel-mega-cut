@@ -49,11 +49,20 @@ All other rows (headers, section breaks, notes) are ignored by the parser.
 ## Usage
 ### CLI
 ```bash
+# Using all CLI arguments
+python main.py --csv path/to/scenes.csv --output path/to/output_folder --movies path/to/movie_folder
+
+# Using mix of CLI and environment variables
 python main.py --csv path/to/scenes.csv --output path/to/output_folder
 ```
 
+### CLI Options
+- `--csv`: Path to the scenes CSV file
+- `--output`: Output folder for mega cut videos  
+- `--movies`: Path to the folder containing all movie/show files
+
 ### Environment Variables
-- `MEGA_CUT_MOVIE_FOLDER`: Path to the folder containing all movie/show files
+- `MEGA_CUT_MOVIE_FOLDER`: Path to the folder containing all movie/show files (optional if provided via CLI)
 - `MEGA_CUT_CSV`: Path to the CSV file (optional if provided via CLI)
 - `MEGA_CUT_OUTPUT`: Output folder (optional if provided via CLI)
 
