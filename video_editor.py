@@ -20,6 +20,54 @@ def parse_timecode(tc):
     else:
         raise ValueError(f"Invalid timecode: {tc}")
 
+def create_scene_clip(scene, movie_folder):
+    """
+    Create a clip for a single scene with proper resource management.
+    Returns the clip and its duration, or None if the scene can't be processed.
+    """
+    # Find the video file
+    base_name = scene['movie_show'].replace(':', '').replace('/', '').replace(' ', '_')
+    video_path = os.path.join(movie_folder, f"{scene['movie_show']}.mkv")
+    if not os.path.exists(video_path):
+        # Try with underscores
+        video_path = os.path.join(movie_folder, f"{base_name}.mkv")
+    if not os.path.exists(video_path):
+        print(f"[WARN] Video file not found for scene: {scene['movie_show']} at {video_path}")
+        return None, 0
+    
+    try:
+        start = parse_timecode(scene['start_timecode'])
+        end = parse_timecode(scene['end_timecode'])
+        
+        # Create the base clip
+        clip = VideoFileClip(video_path).subclipped(start, end)
+        
+        # Add timeline overlay if present
+        date_text = scene.get('timeline_placement', '')
+        if date_text:
+            txt_clip = (
+                TextClip(
+                    text=date_text,
+                    font_size=24,
+                    color='white',
+                    font='DejaVuSans',
+                    bg_color=None,
+                    size=(clip.w//2, 40),
+                    method='caption',
+                    duration=clip.duration
+                )
+                .with_position(("right", "top"))
+                .with_end(2)
+                .with_effects([vfx.FadeOut(1)])
+            )
+            clip = CompositeVideoClip([clip, txt_clip]).with_duration(clip.duration)
+        
+        return clip, clip.duration
+        
+    except Exception as e:
+        print(f"[ERROR] Could not process scene {scene['movie_show']} ({scene['start_timecode']} - {scene['end_timecode']}): {e}")
+        return None, 0
+
 def process_scenes(scenes, movie_folder, output_folder, chunk_duration=2*3600):
     """
     Process the list of scenes and create the mega cut video chunks.
@@ -31,104 +79,85 @@ def process_scenes(scenes, movie_folder, output_folder, chunk_duration=2*3600):
         chunk_duration: Max duration (in seconds) for each output chunk (default: 2 hours)
     """
     os.makedirs(output_folder, exist_ok=True)
-    clips = []
+    
+    # Calculate scene durations and group into chunks without creating clips yet
     scene_durations = []
+    valid_scenes = []
+    
+    print("[INFO] Calculating scene durations...")
     for scene in scenes:
-        # Find the video file (simple heuristic: movie_show + .mkv)
-        # You may want to improve this for real use cases
+        # Just calculate duration without creating clips
         base_name = scene['movie_show'].replace(':', '').replace('/', '').replace(' ', '_')
         video_path = os.path.join(movie_folder, f"{scene['movie_show']}.mkv")
         if not os.path.exists(video_path):
-            # Try with underscores
             video_path = os.path.join(movie_folder, f"{base_name}.mkv")
         if not os.path.exists(video_path):
             print(f"[WARN] Video file not found for scene: {scene['movie_show']} at {video_path}")
             continue
+            
         try:
             start = parse_timecode(scene['start_timecode'])
             end = parse_timecode(scene['end_timecode'])
-            clip = VideoFileClip(video_path).subclipped(start, end)
-            # Overlay timeline_placement (date) in the top right corner
-            date_text = scene.get('timeline_placement', '')
-            if date_text:
-                txt_clip = (
-                    TextClip(
-                        text=date_text,
-                        font_size=24,
-                        color='white',
-                        font='DejaVuSans',
-                        bg_color=None,
-                        size=(clip.w//2, 40),
-                        method='caption',
-                        duration=clip.duration
-                    )
-                    .with_position(("right", "top"))
-                    .with_end(2)
-                    .with_effects([vfx.FadeOut(1)])
-                )
-                clip = CompositeVideoClip([clip, txt_clip]).with_duration(clip.duration)
-            clips.append(clip)
-            scene_durations.append(clip.duration)
+            duration = end - start
+            scene_durations.append(duration)
+            valid_scenes.append(scene)
         except Exception as e:
-            print(f"[ERROR] Could not process scene {scene['movie_show']} ({scene['start_timecode']} - {scene['end_timecode']}): {e}")
+            print(f"[ERROR] Could not calculate duration for scene {scene['movie_show']}: {e}")
             continue
 
-    # Split into ~2 hour chunks, do not split scenes
+    # Group scenes into chunks
+    print("[INFO] Grouping scenes into chunks...")
     chunks = []
     current_chunk = []
     current_duration = 0
-    current_indices = []
-    chunk_indices = []
-    for idx, (clip, dur) in enumerate(zip(clips, scene_durations)):
+    
+    for idx, (scene, dur) in enumerate(zip(valid_scenes, scene_durations)):
         if current_duration + dur > chunk_duration and current_chunk:
             chunks.append(current_chunk)
-            chunk_indices.append(current_indices)
             current_chunk = []
-            current_indices = []
             current_duration = 0
-        current_chunk.append(clip)
-        current_indices.append(idx)
+        current_chunk.append(scene)
         current_duration += dur
+        
     if current_chunk:
         chunks.append(current_chunk)
-        chunk_indices.append(current_indices)
 
-    # Render each chunk
-    for i, (chunk, indices) in enumerate(zip(chunks, chunk_indices), 1):
-        processed_chunk = []
-        for j, (clip, scene_idx) in enumerate(zip(chunk, indices)):
-            # Rebuild the base VideoFileClip and overlay for each scene
-            scene = scenes[scene_idx]
-            base_name = scene['movie_show'].replace(':', '').replace('/', '').replace(' ', '_')
-            video_path = os.path.join(movie_folder, f"{scene['movie_show']}.mkv")
-            if not os.path.exists(video_path):
-                video_path = os.path.join(movie_folder, f"{base_name}.mkv")
-            start = parse_timecode(scene['start_timecode'])
-            end = parse_timecode(scene['end_timecode'])
-            base_clip = VideoFileClip(video_path).subclipped(start, end)
-            date_text = scene.get('timeline_placement', '')
-            if date_text:
-                txt_clip = (
-                    TextClip(
-                        text=date_text,
-                        font_size=24,
-                        color='white',
-                        font='DejaVuSans',
-                        bg_color=None,
-                        size=(base_clip.w//2, 40),
-                        method='caption',
-                        duration=base_clip.duration
-                    )
-                    .with_position(("right", "top"))
-                    .with_end(2)
-                    .with_effects([vfx.FadeOut(1)])
-                )
-                base_clip = CompositeVideoClip([base_clip, txt_clip]).with_duration(base_clip.duration)
-            processed_chunk.append(base_clip)
+    # Process each chunk
+    for i, chunk_scenes in enumerate(chunks, 1):
+        print(f"[INFO] Processing chunk {i} with {len(chunk_scenes)} scenes...")
+        
+        # Create clips for this chunk only
+        chunk_clips = []
+        for scene in chunk_scenes:
+            clip, duration = create_scene_clip(scene, movie_folder)
+            if clip is not None:
+                chunk_clips.append(clip)
+        
+        if not chunk_clips:
+            print(f"[WARN] No valid clips in chunk {i}, skipping...")
+            continue
+            
+        # Concatenate and render
         out_path = os.path.join(output_folder, f"mega_cut_part_{i}.mp4")
-        print(f"[INFO] Rendering chunk {i} with {len(processed_chunk)} scenes to {out_path}")
-        final = concatenate_videoclips(processed_chunk, method="compose", padding=-1)
-        final.write_videofile(out_path, codec="libx264", audio_codec="aac")
-        for c in processed_chunk:
-            c.close()
-        final.close() 
+        print(f"[INFO] Rendering chunk {i} to {out_path}")
+        
+        try:
+            final = concatenate_videoclips(chunk_clips, method="compose", padding=-1)
+            final.write_videofile(out_path, codec="libx264", audio_codec="aac")
+            
+            # Clean up resources immediately after rendering
+            final.close()
+            for clip in chunk_clips:
+                clip.close()
+                
+        except Exception as e:
+            print(f"[ERROR] Failed to render chunk {i}: {e}")
+            # Clean up even if rendering failed
+            for clip in chunk_clips:
+                try:
+                    clip.close()
+                except:
+                    pass
+            continue
+        
+        print(f"[INFO] Successfully rendered chunk {i}") 
