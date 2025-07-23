@@ -192,8 +192,7 @@ def process_scenes(scenes, movie_folder, output_folder, chunk_duration=2*3600):
                 audio_codec="aac",
                 temp_audiofile_path=temp_audio,
                 remove_temp=True,
-                logger=None,  # Suppress verbose output
-                verbose=False
+                logger=None  # Suppress verbose output
             )
             
             print(f"[INFO] Successfully rendered chunk {i}")
