@@ -4,6 +4,17 @@ from moviepy import concatenate_videoclips
 from moviepy.video.VideoClip import TextClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 from moviepy import vfx
+import platform
+
+def get_system_font():
+    """Get a system font that works across platforms."""
+    system = platform.system().lower()
+    if system == "windows":
+        return "Arial"
+    elif system == "darwin":  # macOS
+        return "Helvetica"
+    else:  # Linux and others
+        return "Liberation-Sans"
 
 def parse_timecode(tc):
     """Parse a timecode string (HH:MM:SS or MM:SS or SS) to seconds."""
@@ -25,47 +36,60 @@ def create_scene_clip(scene, movie_folder):
     Create a clip for a single scene with proper resource management.
     Returns the clip and its duration, or None if the scene can't be processed.
     """
-    # Find the video file
-    base_name = scene['movie_show'].replace(':', '').replace('/', '').replace(' ', '_')
-    video_path = os.path.join(movie_folder, f"{scene['movie_show']}.mkv")
-    if not os.path.exists(video_path):
-        # Try with underscores
-        video_path = os.path.join(movie_folder, f"{base_name}.mkv")
-    if not os.path.exists(video_path):
-        print(f"[WARN] Video file not found for scene: {scene['movie_show']} at {video_path}")
-        return None, 0
-    
+    clip = None
     try:
+        # Find the video file
+        base_name = scene['movie_show'].replace(':', '').replace('/', '').replace(' ', '_')
+        video_path = os.path.join(movie_folder, f"{scene['movie_show']}.mkv")
+        if not os.path.exists(video_path):
+            # Try with underscores
+            video_path = os.path.join(movie_folder, f"{base_name}.mkv")
+        if not os.path.exists(video_path):
+            print(f"[WARN] Video file not found for scene: {scene['movie_show']} at {video_path}")
+            return None, 0
+        
         start = parse_timecode(scene['start_timecode'])
         end = parse_timecode(scene['end_timecode'])
         
-        # Create the base clip
-        clip = VideoFileClip(video_path).subclipped(start, end)
+        # Create the base clip with explicit audio codec handling
+        clip = VideoFileClip(video_path, audio_fps=44100, audio_nbytes=2).subclipped(start, end)
         
         # Add timeline overlay if present
         date_text = scene.get('timeline_placement', '')
         if date_text:
-            txt_clip = (
-                TextClip(
-                    text=date_text,
-                    font_size=24,
-                    color='white',
-                    font='DejaVuSans',
-                    bg_color=None,
-                    size=(clip.w//2, 40),
-                    method='caption',
-                    duration=clip.duration
+            try:
+                # Use system-appropriate font
+                system_font = get_system_font()
+                txt_clip = (
+                    TextClip(
+                        text=date_text,
+                        font_size=24,
+                        color='white',
+                        font=system_font,
+                        bg_color=None,
+                        size=(clip.w//2, 40),
+                        method='caption',
+                        duration=clip.duration
+                    )
+                    .with_position(("right", "top"))
+                    .with_end(2)
+                    .with_effects([vfx.FadeOut(1)])
                 )
-                .with_position(("right", "top"))
-                .with_end(2)
-                .with_effects([vfx.FadeOut(1)])
-            )
-            clip = CompositeVideoClip([clip, txt_clip]).with_duration(clip.duration)
+                clip = CompositeVideoClip([clip, txt_clip]).with_duration(clip.duration)
+            except Exception as font_error:
+                print(f"[WARN] Could not add text overlay for {scene['movie_show']}: {font_error}")
+                # Continue without text overlay rather than failing completely
         
         return clip, clip.duration
         
     except Exception as e:
         print(f"[ERROR] Could not process scene {scene['movie_show']} ({scene['start_timecode']} - {scene['end_timecode']}): {e}")
+        # Ensure cleanup if clip was partially created
+        if clip is not None:
+            try:
+                clip.close()
+            except:
+                pass
         return None, 0
 
 def process_scenes(scenes, movie_folder, output_folder, chunk_duration=2*3600):
@@ -128,10 +152,17 @@ def process_scenes(scenes, movie_folder, output_folder, chunk_duration=2*3600):
         
         # Create clips for this chunk only
         chunk_clips = []
+        failed_clips = []
+        
         for scene in chunk_scenes:
             clip, duration = create_scene_clip(scene, movie_folder)
             if clip is not None:
                 chunk_clips.append(clip)
+            else:
+                failed_clips.append(scene['movie_show'])
+        
+        if failed_clips:
+            print(f"[WARN] Failed to process {len(failed_clips)} scenes in chunk {i}: {', '.join(failed_clips)}")
         
         if not chunk_clips:
             print(f"[WARN] No valid clips in chunk {i}, skipping...")
@@ -141,23 +172,35 @@ def process_scenes(scenes, movie_folder, output_folder, chunk_duration=2*3600):
         out_path = os.path.join(output_folder, f"mega_cut_part_{i}.mp4")
         print(f"[INFO] Rendering chunk {i} to {out_path}")
         
+        final = None
         try:
             final = concatenate_videoclips(chunk_clips, method="compose", padding=-1)
-            final.write_videofile(out_path, codec="libx264", audio_codec="aac")
+            final.write_videofile(
+                out_path, 
+                codec="libx264", 
+                audio_codec="aac",
+                temp_audiofile_path="temp-audio.m4a",
+                remove_temp=True
+            )
             
-            # Clean up resources immediately after rendering
-            final.close()
-            for clip in chunk_clips:
-                clip.close()
-                
+            print(f"[INFO] Successfully rendered chunk {i}")
+            
         except Exception as e:
             print(f"[ERROR] Failed to render chunk {i}: {e}")
-            # Clean up even if rendering failed
+            
+        finally:
+            # Clean up resources in finally block to guarantee cleanup
+            if final is not None:
+                try:
+                    final.close()
+                except:
+                    pass
+            
             for clip in chunk_clips:
                 try:
                     clip.close()
                 except:
                     pass
-            continue
-        
-        print(f"[INFO] Successfully rendered chunk {i}") 
+            
+            # Clear the list to help with garbage collection
+            chunk_clips.clear() 
