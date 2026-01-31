@@ -20,11 +20,13 @@ def extract_scenes(csv_path: str) -> List[Dict[str, Optional[str]]]:
       - end_timecode
       - comment (optional)
       - timeline_placement
+      - audio_title (optional)
     """
     scenes = []
     df = pd.read_csv(csv_path, header=None, dtype=str, keep_default_na=False)
     last_scene_timeline = ''
     last_scene_comment = ''
+    last_scene_audio_title = ''
     year_pattern = re.compile(r'^\d{4}$')
     month_pattern = re.compile(r'^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)$', re.IGNORECASE)
     for idx, row in enumerate(df.itertuples(index=False)):
@@ -35,8 +37,9 @@ def extract_scenes(csv_path: str) -> List[Dict[str, Optional[str]]]:
         end_timecode = row[12].strip() if len(row) > 12 else ''
         comment = row[14].strip() if len(row) > 14 else ''
         timeline_placement = row[24].strip() if len(row) > 24 else ''
+        audio_title = row[8].strip() if len(row) > 8 else ''  # Column 8 for audio_title
 
-        # Only propagate timeline and comment from previous valid scene rows
+        # Only propagate timeline, comment, and audio_title from previous valid scene rows
         if movie_show and start_timecode and end_timecode:
             if timeline_placement:
                 last_scene_timeline = timeline_placement
@@ -46,12 +49,18 @@ def extract_scenes(csv_path: str) -> List[Dict[str, Optional[str]]]:
                 last_scene_comment = comment
             else:
                 comment = last_scene_comment
+            if audio_title:
+                last_scene_audio_title = audio_title
+            else:
+                audio_title = last_scene_audio_title
         else:
-            # Not a valid scene row, do not update last_scene_timeline/comment
+            # Not a valid scene row, do not update last_scene values
             if not timeline_placement:
                 timeline_placement = last_scene_timeline
             if not comment:
                 comment = last_scene_comment
+            if not audio_title:
+                audio_title = last_scene_audio_title
 
         # If timeline_placement is just a month, search upwards for the most recent section header year
         if month_pattern.fullmatch(timeline_placement):
@@ -67,7 +76,7 @@ def extract_scenes(csv_path: str) -> List[Dict[str, Optional[str]]]:
 
         # Only extract rows with Movie/Show, start and end timecodes, and timeline placement
         if movie_show and start_timecode and end_timecode and timeline_placement:
-            scenes.append({
+            scene_dict = {
                 'movie_show': movie_show,
                 'season_episode': season_episode,
                 'episode_title': episode_title,
@@ -75,7 +84,13 @@ def extract_scenes(csv_path: str) -> List[Dict[str, Optional[str]]]:
                 'end_timecode': end_timecode,
                 'comment': comment,
                 'timeline_placement': timeline_placement
-            })
+            }
+            
+            # Add audio_title if it exists
+            if audio_title:
+                scene_dict['audio_title'] = audio_title
+                
+            scenes.append(scene_dict)
     if not scenes:
         print('DEBUG: First 2 rows:', [tuple(df.iloc[i]) for i in range(min(2, len(df)))])
     return scenes 

@@ -68,4 +68,84 @@ def test_all_cli_args(monkeypatch):
         assert 'Loading scenes from: test.csv' in result.output
         assert 'Output folder: outdir' in result.output
         assert 'Movie folder: moviedir' in result.output
-        assert result.exit_code == 0 
+        assert result.exit_code == 0
+
+def test_chunks_parameter(monkeypatch):
+    """Test the --chunks parameter parsing and integration."""
+    runner = CliRunner()
+    monkeypatch.delenv('MEGA_CUT_CSV', raising=False)
+    monkeypatch.delenv('MEGA_CUT_OUTPUT', raising=False)
+    monkeypatch.delenv('MEGA_CUT_MOVIE_FOLDER', raising=False)
+    with runner.isolated_filesystem():
+        with open('test.csv', 'w') as f:
+            f.write('movie,season,episode,title,start_time,end_time,timeline\n')
+        
+        # Test valid chunk selection
+        result = runner.invoke(main, [
+            '--csv', 'test.csv', 
+            '--output', 'outdir', 
+            '--movies', 'moviedir',
+            '--chunks', '1,2,4-6'
+        ])
+        assert 'Chunk selection: [1, 2, 4, 5, 6]' in result.output
+        assert result.exit_code == 0
+
+def test_chunks_parameter_single(monkeypatch):
+    """Test the --chunks parameter with single chunk."""
+    runner = CliRunner()
+    monkeypatch.delenv('MEGA_CUT_CSV', raising=False)
+    monkeypatch.delenv('MEGA_CUT_OUTPUT', raising=False)
+    monkeypatch.delenv('MEGA_CUT_MOVIE_FOLDER', raising=False)
+    with runner.isolated_filesystem():
+        with open('test.csv', 'w') as f:
+            f.write('movie,season,episode,title,start_time,end_time,timeline\n')
+        
+        # Test single chunk
+        result = runner.invoke(main, [
+            '--csv', 'test.csv', 
+            '--output', 'outdir', 
+            '--movies', 'moviedir',
+            '--chunks', '3'
+        ])
+        assert 'Chunk selection: [3]' in result.output
+        assert result.exit_code == 0
+
+def test_chunks_parameter_invalid(monkeypatch):
+    """Test the --chunks parameter with invalid input."""
+    runner = CliRunner()
+    monkeypatch.delenv('MEGA_CUT_CSV', raising=False)
+    monkeypatch.delenv('MEGA_CUT_OUTPUT', raising=False)
+    monkeypatch.delenv('MEGA_CUT_MOVIE_FOLDER', raising=False)
+    with runner.isolated_filesystem():
+        with open('test.csv', 'w') as f:
+            f.write('movie,season,episode,title,start_time,end_time,timeline\n')
+        
+        # Test invalid chunk selection - should exit with error
+        result = runner.invoke(main, [
+            '--csv', 'test.csv', 
+            '--output', 'outdir', 
+            '--movies', 'moviedir',
+            '--chunks', 'abc'
+        ])
+        assert 'Error parsing chunk selection' in result.output
+        assert result.exit_code == 1
+
+def test_chunks_parameter_invalid_range(monkeypatch):
+    """Test the --chunks parameter with invalid range."""
+    runner = CliRunner()
+    monkeypatch.delenv('MEGA_CUT_CSV', raising=False)
+    monkeypatch.delenv('MEGA_CUT_OUTPUT', raising=False)
+    monkeypatch.delenv('MEGA_CUT_MOVIE_FOLDER', raising=False)
+    with runner.isolated_filesystem():
+        with open('test.csv', 'w') as f:
+            f.write('movie,season,episode,title,start_time,end_time,timeline\n')
+        
+        # Test invalid range (start > end)
+        result = runner.invoke(main, [
+            '--csv', 'test.csv', 
+            '--output', 'outdir', 
+            '--movies', 'moviedir',
+            '--chunks', '5-2'
+        ])
+        assert 'Error parsing chunk selection' in result.output
+        assert result.exit_code == 1 

@@ -6,4 +6,6 @@ moviepy
 pytest
 Pillow
 pytesseract
-opencv-python 
+opencv-python
+rich
+tqdm 
